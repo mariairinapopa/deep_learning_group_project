@@ -66,4 +66,3 @@ streamlit run frontend/app.py
 - [x] Step 5 — Streamlit frontend with live prediction
 - [ ] Stretch — SHAP feature importance for "why this employee is flagged"
 - [ ] Stretch — expand the form to all input features
-# deep_learning_group_project
