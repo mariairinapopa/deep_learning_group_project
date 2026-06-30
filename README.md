@@ -164,7 +164,9 @@ streamlit run frontend/app.py   # launch the live MVP (run from the project root
 ## Project layout
 
 ```
-deeplearning-hr-attrition/
+deep_learning_group_project/
+├── .streamlit/                # Streamlit config (theme, etc.)
+│   └── config.toml
 ├── data/
 │   ├── raw/                 # attrition.csv (from Kaggle — not committed)
 │   └── processed/
