@@ -108,8 +108,6 @@ def gauge_svg(prob: float, color: str) -> str:
       <circle cx="{cx}" cy="{cy}" r="9" fill="{color}"/>
       <text x="{cx}" y="105" text-anchor="middle"
             font-size="34" font-weight="700" fill="#0f172a">{prob:.0%}</text>
-      <text x="{cx}" y="128" text-anchor="middle"
-            font-size="13" fill="#64748b">probability</text>
     </svg>
     """
 
@@ -142,7 +140,29 @@ st.markdown(
         font-weight: 700; color: #64748b; margin-bottom: .4rem;
       }
       div.stButton > button {
-        width: 100%; border-radius: 10px; font-weight: 600; padding: .55rem 0;
+        width: 100%; border-radius: 10px; font-weight: 600; padding: .5rem .6rem;
+        border: 1px solid #cbd5e1; background: #f8fafc; color: #0f172a;
+        box-shadow: 0 1px 2px rgba(15,23,42,.05); transition: all .15s ease;
+      }
+      div.stButton > button:hover {
+        border-color: #2563eb; color: #2563eb; background: #eff6ff;
+      }
+      div.stFormSubmitButton, div[data-testid="stFormSubmitButton"] { width: 100%; }
+      div[data-testid="stFormSubmitButton"] > button {
+        width: 100%; border-radius: 10px; font-weight: 700; font-size: 1rem;
+        padding: .7rem 0; margin-top: .4rem;
+        border: 1px solid #1d4ed8; color: #fff;
+        background: linear-gradient(135deg, #2563eb 0%, #1d4ed8 100%);
+        box-shadow: 0 2px 6px rgba(37,99,235,.35); transition: all .15s ease;
+      }
+      div[data-testid="stFormSubmitButton"] > button:hover {
+        background: linear-gradient(135deg, #1d4ed8 0%, #1e40af 100%);
+        border-color: #1e40af; color: #fff;
+        box-shadow: 0 4px 12px rgba(37,99,235,.45);
+      }
+      div[data-testid="stFormSubmitButton"] > button:active,
+      div[data-testid="stFormSubmitButton"] > button:focus {
+        color: #fff; box-shadow: 0 2px 6px rgba(37,99,235,.35);
       }
     </style>
     """,
@@ -162,76 +182,169 @@ st.markdown(
 
 model, scaler, feature_columns, numeric_cols = load_artifacts()
 
+# Default values for every input widget. We seed session_state with these ONCE and
+# let the widgets read/write session_state by key — no hardcoded `value=` args — so
+# preset buttons can overwrite state without tripping Streamlit's
+# "default value + Session State API" warning.
+DEFAULTS = {
+    "age": 35,
+    "monthly_income": 5000,
+    "years_at_company": 5,
+    "job_satisfaction": 3,
+    "work_life_balance": 3,
+    "distance": 8,
+    "overtime": "No",
+    "business_travel": "Non-Travel",
+    "job_role": "Sales Executive",
+    "marital_status": "Single",
+}
+for k, v in DEFAULTS.items():
+    st.session_state.setdefault(k, v)
+st.session_state.setdefault("should_predict", False)
+
+# Preset "history" profiles, calibrated so each lands cleanly in its band.
+PRESETS = {
+    "high": {
+        "age": 24, "monthly_income": 10000, "years_at_company": 1,
+        "job_satisfaction": 2, "work_life_balance": 3, "distance": 15,
+        "overtime": "Yes", "business_travel": "Travel_Frequently",
+        "job_role": "Sales Representative", "marital_status": "Single",
+    },
+    "medium": {
+        "age": 43, "monthly_income": 15000, "years_at_company": 14,
+        "job_satisfaction": 4, "work_life_balance": 4, "distance": 8,
+        "overtime": "No", "business_travel": "Travel_Rarely",
+        "job_role": "Manufacturing Director", "marital_status": "Married",
+    },
+    "low": {
+        "age": 55, "monthly_income": 19000, "years_at_company": 25,
+        "job_satisfaction": 4, "work_life_balance": 4, "distance": 3,
+        "overtime": "No", "business_travel": "Non-Travel",
+        "job_role": "Research Director", "marital_status": "Married",
+    },
+}
+
+
+def apply_preset(preset: dict):
+    """Load a preset into the widgets and request a prediction on the next rerun."""
+    for k, v in preset.items():
+        st.session_state[k] = v
+    st.session_state["should_predict"] = True
+
+
 # A pragmatic subset of the most decision-relevant inputs. Anything not shown is
 # reindexed to 0 (for dummies) — fine for a demo; expand the form for production.
 form_col, result_col = st.columns([1.35, 1], gap="large")
 
 with form_col:
+    # Sample-profile "history" panel. Buttons must live OUTSIDE st.form (Streamlit
+    # only allows submit buttons inside a form).
+    # st.markdown(
+    #     '<div class="card" style="padding:1rem 1.2rem; margin-bottom:1rem;">'
+    #     '<div style="font-weight:700; font-size:1rem; color:#0f172a;">Sample profiles</div>'
+    #     '<div style="font-size:.82rem; color:#64748b;">'
+    #     'click to load &amp; predict instantly</div>'
+    #     '</div>',
+    #     unsafe_allow_html=True,
+    # )
+    h1, h2, h3 = st.columns(3)
+    with h1:
+        st.markdown(
+            '<div style="font-size:.82rem; color:#475569; margin-bottom:.2rem;">'
+            '<span style="color:#dc2626;">●</span> High risk · young, overtime, '
+            'low satisfaction</div>',
+            unsafe_allow_html=True,
+        )
+        st.button("Load High risk", key="preset_high", on_click=apply_preset, use_container_width=True,
+                  args=(PRESETS["high"],))
+    with h2:
+        st.markdown(
+            '<div style="font-size:.82rem; color:#475569; margin-bottom:.2rem;">'
+            '<span style="color:#d97706;">●</span> Medium risk · mid-career, '
+            'some overtime</div>',
+            unsafe_allow_html=True,
+        )
+        st.button("Load Medium risk", key="preset_medium", on_click=apply_preset, use_container_width=True,
+                  args=(PRESETS["medium"],))
+    with h3:
+        st.markdown(
+            '<div style="font-size:.82rem; color:#475569; margin-bottom:.2rem;">'
+            '<span style="color:#16a34a;">●</span> Low risk · senior, settled, '
+            'no overtime</div>',
+            unsafe_allow_html=True,
+        )
+        st.button("Load Low risk", key="preset_low", on_click=apply_preset, use_container_width=True,
+                  args=(PRESETS["low"],))
+
     with st.form("attrition_form"):
         st.markdown('<div class="section-label">Employee profile</div>',
                     unsafe_allow_html=True)
         c1, c2 = st.columns(2)
         with c1:
-            age = st.slider("Age", 18, 60, 35)
-            monthly_income = st.number_input(
-                "Monthly income ($)", 1000, 20000, 5000, step=250
-            )
-            years_at_company = st.slider("Years at company", 0, 40, 5)
-            job_satisfaction = st.select_slider("Job satisfaction (1–4)", [1, 2, 3, 4], 3)
-            work_life_balance = st.select_slider("Work-life balance (1–4)", [1, 2, 3, 4], 3)
+            st.slider("Age", 18, 60, key="age")
+            st.number_input("Monthly income ($)", 1000, 20000, step=250,
+                            key="monthly_income")
+            st.slider("Years at company", 0, 40, key="years_at_company")
+            st.select_slider("Job satisfaction (1–4)", [1, 2, 3, 4],
+                             key="job_satisfaction")
+            st.select_slider("Work-life balance (1–4)", [1, 2, 3, 4],
+                             key="work_life_balance")
         with c2:
-            overtime = st.selectbox("Works overtime?", ["No", "Yes"])
-            business_travel = st.selectbox(
+            st.selectbox("Works overtime?", ["No", "Yes"], key="overtime")
+            st.selectbox(
                 "Business travel",
                 ["Non-Travel", "Travel_Rarely", "Travel_Frequently"],
+                key="business_travel",
             )
-            job_role = st.selectbox(
+            st.selectbox(
                 "Job role",
                 [
                     "Sales Executive", "Research Scientist", "Laboratory Technician",
                     "Manufacturing Director", "Healthcare Representative", "Manager",
                     "Sales Representative", "Research Director", "Human Resources",
                 ],
+                key="job_role",
             )
-            marital_status = st.selectbox(
-                "Marital status", ["Single", "Married", "Divorced"]
-            )
-            distance = st.slider("Distance from home (km)", 1, 30, 8)
+            st.selectbox("Marital status", ["Single", "Married", "Divorced"],
+                         key="marital_status")
+            st.slider("Distance from home (km)", 1, 30, key="distance")
 
-        submitted = st.form_submit_button("Predict attrition risk", type="primary")
+        submitted = st.form_submit_button(
+            "Predict attrition risk", type="primary", use_container_width=True
+        )
+
+if submitted:
+    st.session_state["should_predict"] = True
 
 with result_col:
     st.markdown('<div class="section-label">Prediction</div>', unsafe_allow_html=True)
-    if submitted:
+    if st.session_state["should_predict"]:
         form = {
-            "Age": age,
-            "MonthlyIncome": monthly_income,
-            "YearsAtCompany": years_at_company,
-            "JobSatisfaction": job_satisfaction,
-            "WorkLifeBalance": work_life_balance,
-            "DistanceFromHome": distance,
-            "OverTime": overtime,
-            "BusinessTravel": business_travel,
-            "JobRole": job_role,
-            "MaritalStatus": marital_status,
+            "Age": st.session_state["age"],
+            "MonthlyIncome": st.session_state["monthly_income"],
+            "YearsAtCompany": st.session_state["years_at_company"],
+            "JobSatisfaction": st.session_state["job_satisfaction"],
+            "WorkLifeBalance": st.session_state["work_life_balance"],
+            "DistanceFromHome": st.session_state["distance"],
+            "OverTime": st.session_state["overtime"],
+            "BusinessTravel": st.session_state["business_travel"],
+            "JobRole": st.session_state["job_role"],
+            "MaritalStatus": st.session_state["marital_status"],
         }
         row = build_row(form, feature_columns, numeric_cols, scaler)
         prob = float(model.predict(row, verbose=0).ravel()[0])
         band = risk_band(prob)
 
         st.markdown(
-            f"""
-            <div class="card" style="text-align:center;">
-              {gauge_svg(prob, band['color'])}
-              <div style="margin-top:.6rem; padding:.7rem 1rem; border-radius:10px;
-                          background:{band['soft']}; border:1px solid {band['border']};">
-                <div style="font-weight:700; font-size:1.05rem; color:{band['color']};">
-                  {band['label']}</div>
-                <div style="font-size:.9rem; color:#475569; margin-top:.15rem;">
-                  {band['note']}</div>
-              </div>
-            </div>
-            """,
+            f'<div class="card" style="text-align:center;">'
+            f'{gauge_svg(prob, band["color"]).strip()}'
+            f'<div style="margin-top:.6rem; padding:.7rem 1rem; border-radius:10px;'
+            f' background:{band["soft"]}; border:1px solid {band["border"]};">'
+            f'<div style="font-weight:700; font-size:1.05rem; color:{band["color"]};">'
+            f'{band["label"]}</div>'
+            f'<div style="font-size:.9rem; color:#475569; margin-top:.15rem;">'
+            f'{band["note"]}</div>'
+            f'</div></div>',
             unsafe_allow_html=True,
         )
         st.caption(
@@ -240,12 +353,10 @@ with result_col:
         )
     else:
         st.markdown(
-            """
-            <div class="card" style="text-align:center; color:#64748b;">
-              <div style="font-size:2.4rem;">📊</div>
-              <p style="margin:.4rem 0 0 0;">Fill in the profile and press
-                 <strong>Predict attrition risk</strong> to see a live estimate.</p>
-            </div>
-            """,
+            '<div class="card" style="text-align:center; color:#64748b;">'
+            '<div style="font-size:2.4rem;">📊</div>'
+            '<p style="margin:.4rem 0 0 0;">Fill in the profile and press '
+            '<strong>Predict attrition risk</strong> to see a live estimate.</p>'
+            '</div>',
             unsafe_allow_html=True,
         )
